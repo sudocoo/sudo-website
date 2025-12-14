@@ -1,0 +1,656 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mini-Apps Collapsible Ball</title>
+  <style>
+    :root{
+      --bg: #0b1020;
+      --panel: rgba(255,255,255,.08);
+      --panel2: rgba(255,255,255,.12);
+      --text: rgba(255,255,255,.92);
+      --muted: rgba(255,255,255,.72);
+      --ring: rgba(255,255,255,.18);
+      --shadow: 0 24px 80px rgba(0,0,0,.55);
+      --glow: 0 0 0 1px rgba(255,255,255,.10), 0 0 40px rgba(122,162,255,.15);
+      --radius: 170px; /* "ball" size */
+      --item: 54px;    /* mini-app bubble size */
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+      color: var(--text);
+      background:
+        radial-gradient(1200px 800px at 20% 15%, rgba(122,162,255,.22), transparent 55%),
+        radial-gradient(1000px 700px at 75% 65%, rgba(255,160,122,.16), transparent 60%),
+        radial-gradient(900px 900px at 60% 20%, rgba(124,255,200,.10), transparent 55%),
+        linear-gradient(180deg, #070a14, var(--bg));
+      overflow:hidden;
+    }
+
+    .wrap{
+      height:100%;
+      display:grid;
+      grid-template-rows: auto 1fr auto;
+      padding: 18px 18px 16px;
+      gap: 14px;
+    }
+
+    header{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:12px;
+    }
+    .title{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+      max-width: 760px;
+    }
+    h1{
+      margin:0;
+      font-size: clamp(18px, 2.2vw, 28px);
+      letter-spacing:.2px;
+    }
+    .subtitle{
+      margin:0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .controls{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: var(--panel);
+      box-shadow: var(--glow);
+      backdrop-filter: blur(10px);
+    }
+    .controls label{
+      font-size: 12px;
+      color: var(--muted);
+      display:flex;
+      gap:8px;
+      align-items:center;
+      user-select:none;
+    }
+    input[type="range"]{ width: 140px; }
+
+    main{
+      position:relative;
+      display:grid;
+      place-items:center;
+      min-height: 360px;
+    }
+
+    /* Scene with perspective for 3D-ish rotation */
+    .scene{
+      position:relative;
+      width: min(70vw, 520px);
+      height: min(70vw, 520px);
+      perspective: 900px;
+      user-select:none;
+    }
+
+    /* The “ball” container rotates */
+    .ball{
+      position:absolute;
+      inset:0;
+      transform-style: preserve-3d;
+      border-radius: 50%;
+      /* subtle ring */
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,.06), transparent 55%),
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,.08), transparent 65%);
+      box-shadow: var(--shadow);
+      outline: 1px solid rgba(255,255,255,.06);
+    }
+
+    /* Center glow */
+    .core{
+      position:absolute;
+      inset: 18%;
+      border-radius: 50%;
+      background: radial-gradient(circle at 45% 35%, rgba(255,255,255,.10), transparent 60%),
+                  radial-gradient(circle at 50% 60%, rgba(122,162,255,.12), transparent 60%);
+      filter: blur(.2px);
+      pointer-events:none;
+    }
+
+    /* Mini-app bubble */
+    .app{
+      position:absolute;
+      left:50%;
+      top:50%;
+      width: var(--item);
+      height: var(--item);
+      margin-left: calc(var(--item) / -2);
+      margin-top:  calc(var(--item) / -2);
+      border-radius: 999px;
+      display:grid;
+      place-items:center;
+      background: rgba(255,255,255,.10);
+      border: 1px solid rgba(255,255,255,.14);
+      box-shadow: 0 14px 30px rgba(0,0,0,.35);
+      transform-style: preserve-3d;
+      cursor:pointer;
+      transition:
+        transform 520ms cubic-bezier(.2,.9,.2,1),
+        opacity 520ms cubic-bezier(.2,.9,.2,1),
+        filter 520ms cubic-bezier(.2,.9,.2,1),
+        background 520ms ease,
+        border-color 520ms ease;
+      overflow:hidden;
+    }
+
+    .app::before{
+      content:"";
+      position:absolute;
+      inset:-2px;
+      border-radius: inherit;
+      background: radial-gradient(16px 16px at 30% 25%, rgba(255,255,255,.22), transparent 55%),
+                  radial-gradient(20px 20px at 75% 80%, rgba(255,255,255,.10), transparent 60%);
+      pointer-events:none;
+    }
+
+    .icon{
+      font-size: 20px;
+      transform: translateZ(20px);
+    }
+
+    .app .name{
+      position:absolute;
+      bottom: -22px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      color: rgba(255,255,255,.82);
+      white-space:nowrap;
+      opacity: .85;
+      pointer-events:none;
+    }
+
+    /* Expanded card overlay */
+    .card{
+      position:absolute;
+      width: min(520px, 92vw);
+      max-width: 520px;
+      border-radius: 22px;
+      background: linear-gradient(180deg, var(--panel2), rgba(255,255,255,.06));
+      border: 1px solid rgba(255,255,255,.14);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(12px);
+      padding: 16px 16px 14px;
+      opacity:0;
+      transform: translateY(16px) scale(.985);
+      pointer-events:none;
+      transition: opacity 360ms ease, transform 360ms ease;
+    }
+
+    .card.show{
+      opacity:1;
+      transform: translateY(0) scale(1);
+      pointer-events:auto;
+    }
+
+    .cardTop{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin-bottom: 8px;
+    }
+    .cardTitle{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      min-width: 0;
+    }
+    .chip{
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      display:grid;
+      place-items:center;
+      background: rgba(255,255,255,.10);
+      border: 1px solid rgba(255,255,255,.14);
+      flex: 0 0 auto;
+    }
+    .cardTitle h2{
+      margin:0;
+      font-size: 16px;
+      letter-spacing:.2px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .cardTitle p{
+      margin:2px 0 0;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .btn{
+      appearance:none;
+      border: 1px solid rgba(255,255,255,.18);
+      background: rgba(0,0,0,.18);
+      color: var(--text);
+      padding: 8px 10px;
+      border-radius: 12px;
+      cursor:pointer;
+      transition: transform 120ms ease, background 120ms ease;
+      font-size: 12px;
+    }
+    .btn:hover{ background: rgba(0,0,0,.28); }
+    .btn:active{ transform: scale(.98); }
+
+    .cardBody{
+      display:grid;
+      gap:10px;
+      margin-top: 10px;
+    }
+
+    .row{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .pill{
+      font-size: 12px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.12);
+      color: rgba(255,255,255,.84);
+    }
+
+    .miniPreview{
+      height: 120px;
+      border-radius: 18px;
+      background:
+        radial-gradient(120px 80px at 20% 30%, rgba(122,162,255,.22), transparent 60%),
+        radial-gradient(140px 90px at 75% 70%, rgba(255,160,122,.18), transparent 60%),
+        rgba(0,0,0,.18);
+      border: 1px solid rgba(255,255,255,.10);
+      overflow:hidden;
+      position:relative;
+    }
+    .miniPreview .hint{
+      position:absolute;
+      inset:auto 12px 10px 12px;
+      font-size: 12px;
+      color: rgba(255,255,255,.78);
+    }
+
+    footer{
+      display:flex;
+      justify-content:center;
+      gap:10px;
+      color: rgba(255,255,255,.55);
+      font-size: 12px;
+    }
+
+    /* Dim backdrop when expanded */
+    .backdrop{
+      position:absolute;
+      inset:0;
+      background: rgba(0,0,0,.38);
+      opacity:0;
+      pointer-events:none;
+      transition: opacity 360ms ease;
+    }
+    .backdrop.show{
+      opacity:1;
+      pointer-events:auto;
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce){
+      .app, .card, .backdrop{ transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="title">
+        <h1>Mini-Apps Ball</h1>
+        <p class="subtitle">
+          A rotating “collapsible ball” of mini-apps. Click a bubble to expand it into a card; the others contract and drift away.
+          Click the background to collapse.
+        </p>
+      </div>
+
+      <div class="controls" aria-label="Controls">
+        <label>
+          Speed
+          <input id="speed" type="range" min="0" max="2.5" step="0.05" value="1.0" />
+        </label>
+        <button id="shuffle" class="btn" type="button">Shuffle</button>
+      </div>
+    </header>
+
+    <main>
+      <div id="backdrop" class="backdrop" aria-hidden="true"></div>
+
+      <div class="scene" aria-label="Rotating mini-app ball">
+        <div id="ball" class="ball">
+          <div class="core"></div>
+          <!-- bubbles injected by JS -->
+        </div>
+
+        <div id="card" class="card" role="dialog" aria-modal="true" aria-label="Mini app details">
+          <div class="cardTop">
+            <div class="cardTitle">
+              <div class="chip" id="cardIcon">✨</div>
+              <div style="min-width:0">
+                <h2 id="cardName">Mini App</h2>
+                <p id="cardDesc">Description goes here.</p>
+              </div>
+            </div>
+            <button id="close" class="btn" type="button">Close</button>
+          </div>
+
+          <div class="cardBody">
+            <div class="row" id="cardTags"></div>
+            <div class="miniPreview" id="preview">
+              <div class="hint">This area can become the actual embedded mini-app UI.</div>
+            </div>
+            <div class="row">
+              <button class="btn" type="button" id="launch">Launch (demo)</button>
+              <button class="btn" type="button" id="pin">Pin to top (demo)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer>
+      <span>Tip: Click the same bubble again to collapse.</span>
+      <span>•</span>
+      <span>Works best on modern Chrome/Edge/Safari/Firefox.</span>
+    </footer>
+  </div>
+
+  <script>
+    // ----- Data: your mini-apps -----
+    const APPS = [
+      { name: "Timer",        icon:"⏱️", desc:"A focused countdown timer for sprints.", tags:["Productivity","Simple UI","Offline"] },
+      { name: "Notes",        icon:"📝", desc:"Quick capture notes with lightweight formatting.", tags:["Text","Fast","Search"] },
+      { name: "Weather",      icon:"🌦️", desc:"A compact forecast panel (stubbed demo).", tags:["API-ready","Widgets"] },
+      { name: "Habit Tracker",icon:"✅", desc:"Track daily habits with streaks.", tags:["Streaks","Charts"] },
+      { name: "Calculator",   icon:"🧮", desc:"A minimal calculator panel.", tags:["Utility"] },
+      { name: "Music",        icon:"🎧", desc:"A mini player UI concept (demo).", tags:["Media","Controls"] },
+      { name: "Pomodoro",     icon:"🍅", desc:"Work/break cycles with presets.", tags:["Focus","Presets"] },
+      { name: "Kanban",       icon:"🧩", desc:"Tiny board for tasks (demo).", tags:["Drag & drop","Boards"] },
+      { name: "Flashcards",   icon:"🧠", desc:"Study cards with spaced repetition hooks.", tags:["Study","SRS-ready"] },
+      { name: "Bookmarks",    icon:"🔖", desc:"Save and filter favorite links (demo).", tags:["Organize","Tags"] },
+      { name: "Converter",    icon:"📐", desc:"Unit conversions in a neat UI.", tags:["Units","Quick"] },
+      { name: "Sketch",       icon:"✏️", desc:"A micro canvas for doodles (demo).", tags:["Canvas","Fun"] },
+    ];
+
+    // ----- Collapsible ball / layout params -----
+    const ball = document.getElementById("ball");
+    const card = document.getElementById("card");
+    const backdrop = document.getElementById("backdrop");
+
+    const speedEl = document.getElementById("speed");
+    const shuffleBtn = document.getElementById("shuffle");
+    const closeBtn = document.getElementById("close");
+
+    const cardIcon = document.getElementById("cardIcon");
+    const cardName = document.getElementById("cardName");
+    const cardDesc = document.getElementById("cardDesc");
+    const cardTags = document.getElementById("cardTags");
+
+    const launchBtn = document.getElementById("launch");
+    const pinBtn = document.getElementById("pin");
+
+    let items = [];
+    let selectedIndex = -1;
+    let t = 0;
+    let baseSpeed = 1.0;
+
+    // Create bubbles
+    function createBubbles(){
+      ball.querySelectorAll(".app").forEach(n => n.remove());
+      items = APPS.map((app, i) => {
+        const el = document.createElement("button");
+        el.className = "app";
+        el.type = "button";
+        el.setAttribute("aria-label", `Open ${app.name}`);
+        el.innerHTML = `<div class="icon">${app.icon}</div><div class="name">${app.name}</div>`;
+        el.addEventListener("click", (e) => {
+          e.stopPropagation();
+          toggleSelect(i);
+        });
+        ball.appendChild(el);
+        return { app, el, seed: Math.random()*9999 };
+      });
+      // randomize initial distribution
+      scatterOnSphere();
+      applyTransforms(0);
+    }
+
+    // Fibonacci sphere distribution (nice, even-ish points)
+    function spherePoints(n){
+      const pts = [];
+      const phi = Math.PI * (3 - Math.sqrt(5)); // golden angle
+      for (let i=0;i<n;i++){
+        const y = 1 - (i/(n-1))*2;
+        const radius = Math.sqrt(1 - y*y);
+        const theta = phi*i;
+        const x = Math.cos(theta)*radius;
+        const z = Math.sin(theta)*radius;
+        pts.push({x,y,z});
+      }
+      return pts;
+    }
+
+    let basePts = [];
+    function scatterOnSphere(){
+      basePts = spherePoints(items.length);
+
+      // shuffle the mapping for variety (stable-ish random)
+      // We'll keep pts but randomize app ordering on demand via shuffle button.
+      // (The visual spread is determined by basePts and per-item "seed".)
+    }
+
+    // Rotation + collapse/expand transforms
+    function applyTransforms(dt){
+      // rotate the whole ball (3D-ish)
+      t += dt * 0.001 * baseSpeed;
+      const rotY = t * 0.75;
+      const rotX = Math.sin(t*0.6) * 0.25;
+
+      ball.style.transform = `rotateX(${rotX}rad) rotateY(${rotY}rad)`;
+
+      const radius = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--radius")) || 170;
+
+      items.forEach((it, i) => {
+        const p = basePts[i];
+
+        // Depth ordering: convert z to scale/opacity
+        // (We’ll fake depth by scaling based on z.)
+        const z = p.z;
+        const depthScale = 0.75 + (z + 1) * 0.18;   // ~0.75..1.11
+        const depthOpacity = 0.45 + (z + 1) * 0.27; // ~0.45..0.99
+
+        // Core position on sphere (projected to 2D plane)
+        const x = p.x * radius;
+        const y = p.y * radius * 0.95;
+
+        // When something is selected:
+        // - selected bubble moves slightly forward + grows
+        // - others drift outward and shrink/blur a bit
+        const isSelected = (selectedIndex === i);
+        const somethingSelected = (selectedIndex !== -1);
+
+        let drift = 0;
+        let extraScale = 1;
+        let extraZ = 0;
+        let blur = 0;
+        let opacity = depthOpacity;
+
+        if (somethingSelected){
+          if (isSelected){
+            drift = -0.10; // slightly toward center
+            extraScale = 1.65;
+            extraZ = 120;
+            blur = 0;
+            opacity = 1;
+            it.el.style.background = "rgba(255,255,255,.14)";
+            it.el.style.borderColor = "rgba(255,255,255,.22)";
+          } else {
+            // push away from selected point
+            const sp = basePts[selectedIndex];
+            const dx = p.x - sp.x;
+            const dy = p.y - sp.y;
+            const dz = p.z - sp.z;
+            const len = Math.sqrt(dx*dx + dy*dy + dz*dz) || 1;
+            const ux = dx/len, uy = dy/len;
+
+            drift = 1.05; // outward
+            extraScale = 0.72;
+            extraZ = -40;
+            blur = 0.6;
+            opacity = Math.max(0.06, depthOpacity * 0.55);
+
+            // drift direction in 2D
+            const ox = ux * radius * 0.55;
+            const oy = uy * radius * 0.55;
+
+            it.el.style.transform =
+              `translate3d(${x + ox*drift}px, ${y + oy*drift}px, ${p.z*radius + extraZ}px)
+               scale(${depthScale*extraScale})`;
+            it.el.style.opacity = opacity.toFixed(3);
+            it.el.style.filter = `blur(${blur}px)`;
+            it.el.style.pointerEvents = "none";
+            it.el.style.background = "rgba(255,255,255,.07)";
+            it.el.style.borderColor = "rgba(255,255,255,.10)";
+            return;
+          }
+        }
+
+        it.el.style.transform =
+          `translate3d(${x*(1+drift)}px, ${y*(1+drift)}px, ${p.z*radius + extraZ}px)
+           scale(${depthScale*extraScale})`;
+        it.el.style.opacity = opacity.toFixed(3);
+        it.el.style.filter = `blur(${blur}px)`;
+        it.el.style.pointerEvents = "auto";
+      });
+    }
+
+    // Expand/collapse selection
+    function toggleSelect(i){
+      if (selectedIndex === i) {
+        collapse();
+        return;
+      }
+      selectedIndex = i;
+      showCard(items[i].app);
+      backdrop.classList.add("show");
+      card.classList.add("show");
+      applyTransforms(0);
+    }
+
+    function collapse(){
+      selectedIndex = -1;
+      backdrop.classList.remove("show");
+      card.classList.remove("show");
+      // restore styles cleanly
+      items.forEach(it => {
+        it.el.style.pointerEvents = "auto";
+        it.el.style.background = "";
+        it.el.style.borderColor = "";
+      });
+      applyTransforms(0);
+    }
+
+    // Card content
+    function showCard(app){
+      cardIcon.textContent = app.icon;
+      cardName.textContent = app.name;
+      cardDesc.textContent = app.desc;
+
+      cardTags.innerHTML = "";
+      (app.tags || []).forEach(t => {
+        const pill = document.createElement("div");
+        pill.className = "pill";
+        pill.textContent = t;
+        cardTags.appendChild(pill);
+      });
+    }
+
+    // Animation loop
+    let last = performance.now();
+    function loop(now){
+      const dt = now - last;
+      last = now;
+      // Keep subtle rotation even when expanded (feels alive)
+      const slowFactor = (selectedIndex === -1) ? 1 : 0.35;
+      applyTransforms(dt * slowFactor);
+      requestAnimationFrame(loop);
+    }
+
+    // Shuffle apps (changes mapping between apps and sphere points)
+    function shuffleApps(){
+      // Fisher-Yates shuffle of items array, while keeping DOM nodes
+      for (let i = items.length - 1; i > 0; i--){
+        const j = Math.floor(Math.random() * (i + 1));
+        [items[i], items[j]] = [items[j], items[i]];
+      }
+      // Re-append DOM in new order to match basePts indices
+      items.forEach(it => ball.appendChild(it.el));
+      if (selectedIndex !== -1) collapse();
+      applyTransforms(0);
+    }
+
+    // Controls & interactions
+    speedEl.addEventListener("input", () => {
+      baseSpeed = parseFloat(speedEl.value);
+    });
+
+    shuffleBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      shuffleApps();
+    });
+
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      collapse();
+    });
+
+    backdrop.addEventListener("click", collapse);
+
+    // Optional demo buttons
+    launchBtn.addEventListener("click", () => {
+      alert("Demo: This is where you would open/launch the selected mini-app UI.");
+    });
+    pinBtn.addEventListener("click", () => {
+      alert("Demo: Pin logic would go here (e.g., move selected app to index 0).");
+    });
+
+    // Click empty scene area collapses if expanded
+    document.addEventListener("click", (e) => {
+      const clickedInsideBall = ball.contains(e.target);
+      const clickedInsideCard = card.contains(e.target);
+      if (selectedIndex !== -1 && !clickedInsideBall && !clickedInsideCard) collapse();
+    });
+
+    // Init
+    createBubbles();
+    baseSpeed = parseFloat(speedEl.value);
+    requestAnimationFrame(loop);
+  </script>
+</body>
+</html>
